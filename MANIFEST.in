@@ -1,0 +1,4 @@
+include LICENSE
+include README.md
+recursive-include django_advance_thumbnail *
+prune django_advance_thumbnail/tests
