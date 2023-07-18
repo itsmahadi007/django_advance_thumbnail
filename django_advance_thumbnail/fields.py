@@ -1,7 +1,8 @@
+import io
 import os
 
 from PIL import Image
-from django.conf import settings
+from django.core.files import File
 from django.db import models
 
 
@@ -24,28 +25,28 @@ class AdvanceThumbnailField(models.ImageField):
 
     def create_thumbnail(self, instance, **kwargs):
         source_field = getattr(instance, self.source_field_name)
-        if not source_field or not source_field.path:
+        if not source_field or not source_field.name:
             return
-
-        img = Image.open(source_field.path)
-        img.thumbnail(self.size)
-
-        thumbnail_path = os.path.join(os.path.dirname(source_field.path), 'thumbnails')
-        os.makedirs(thumbnail_path, exist_ok=True)
-
-        # Split the filename into name and extension, add '_thumbnail' to the name, and join them back together
-        filename, extension = os.path.splitext(os.path.basename(source_field.path))
-        thumbnail_filename = os.path.join(thumbnail_path, f"{filename}_thumbnail{extension}")
-
-        img.save(thumbnail_filename)
-
-        setattr(instance, self.name, os.path.relpath(thumbnail_filename, start=settings.MEDIA_ROOT))
-
-        # Disconnect the signal before saving
+            # Disconnect the signal before creating and saving the thumbnail
         models.signals.post_save.disconnect(self.create_thumbnail, sender=instance.__class__)
 
-        # Save only the thumbnail field
-        instance.save(update_fields=[self.name])
+        try:
+            with source_field.open() as source_file:
+                img = Image.open(source_file)
+                img.thumbnail(self.size)
 
-        # Reconnect the signal after saving
-        models.signals.post_save.connect(self.create_thumbnail, sender=instance.__class__)
+                filename, extension = os.path.splitext(os.path.basename(source_field.name))
+                thumbnail_filename = f"{filename}_thumbnail{extension}"
+
+                thumbnail_io = io.BytesIO()
+                img.save(thumbnail_io, format=img.format)
+                thumbnail_io.seek(0)
+
+                thumbnail_file = File(thumbnail_io, name=thumbnail_filename)
+                setattr(instance, self.name, thumbnail_file)
+
+                instance.save(update_fields=[self.name])
+
+        finally:
+            # Reconnect the signal after saving
+            models.signals.post_save.connect(self.create_thumbnail, sender=instance.__class__)
