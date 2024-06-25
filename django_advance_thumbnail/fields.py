@@ -1,7 +1,7 @@
 import io
 import os
 
-from PIL import Image
+from PIL import Image, ImageOps
 from django.core.files import File
 from django.db import models
 
@@ -27,12 +27,16 @@ class AdvanceThumbnailField(models.ImageField):
         source_field = getattr(instance, self.source_field_name)
         if not source_field or not source_field.name:
             return
-            # Disconnect the signal before creating and saving the thumbnail
+        # Disconnect the signal before creating and saving the thumbnail
         models.signals.post_save.disconnect(self.create_thumbnail, sender=instance.__class__)
 
         try:
             with source_field.open() as source_file:
                 img = Image.open(source_file)
+
+                # Handle orientation from EXIF data
+                img = ImageOps.exif_transpose(img)
+
                 img.thumbnail(self.size)
 
                 filename, extension = os.path.splitext(os.path.basename(source_field.name))
