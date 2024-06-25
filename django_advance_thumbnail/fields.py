@@ -27,6 +27,7 @@ class AdvanceThumbnailField(models.ImageField):
         source_field = getattr(instance, self.source_field_name)
         if not source_field or not source_field.name:
             return
+
         # Disconnect the signal before creating and saving the thumbnail
         models.signals.post_save.disconnect(self.create_thumbnail, sender=instance.__class__)
 
@@ -43,7 +44,16 @@ class AdvanceThumbnailField(models.ImageField):
                 thumbnail_filename = f"{filename}_thumbnail{extension}"
 
                 thumbnail_io = io.BytesIO()
-                img.save(thumbnail_io, format=img.format)
+
+                # Determine the format based on the file extension, fallback to JPEG if not found
+                if extension.lower() in ['.jpg', '.jpeg']:
+                    image_format = 'JPEG'
+                elif extension.lower() == '.png':
+                    image_format = 'PNG'
+                else:
+                    image_format = 'JPEG'  # Default to JPEG if unsure
+
+                img.save(thumbnail_io, format=image_format)
                 thumbnail_io.seek(0)
 
                 thumbnail_file = File(thumbnail_io, name=thumbnail_filename)
