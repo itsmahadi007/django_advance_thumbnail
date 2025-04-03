@@ -2,7 +2,7 @@ import io
 import os
 
 from PIL import Image, ImageOps
-from django.core.files import File
+from django.db.models.fields.files import FieldFile
 from django.db import models
 
 
@@ -27,9 +27,6 @@ class AdvanceThumbnailField(models.ImageField):
         source_field = getattr(instance, self.source_field_name)
         if not source_field or not source_field.name:
             return
-
-        # Disconnect the signal before creating and saving the thumbnail
-        models.signals.post_save.disconnect(self.create_thumbnail, sender=instance.__class__)
 
         try:
             with source_field.open() as source_file:
@@ -56,11 +53,10 @@ class AdvanceThumbnailField(models.ImageField):
                 img.save(thumbnail_io, format=image_format)
                 thumbnail_io.seek(0)
 
-                thumbnail_file = File(thumbnail_io, name=thumbnail_filename)
-                setattr(instance, self.name, thumbnail_file)
+                thumbnail_file = FieldFile(instance, self, thumbnail_filename)
+                thumbnail_file.save(thumbnail_filename, thumbnail_io, save=False)
 
-                instance.save(update_fields=[self.name])
+                instance.__class__.objects.filter(pk=instance.pk).update(**{self.name: thumbnail_file})
 
         finally:
-            # Reconnect the signal after saving
-            models.signals.post_save.connect(self.create_thumbnail, sender=instance.__class__)
+            pass
