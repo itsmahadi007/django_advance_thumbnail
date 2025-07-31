@@ -1,2 +1,46 @@
 [build-system]
-requires = ["setuptools", "wheel"]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "django_advance_thumbnail"
+version = "1.1.1"
+description = "A Django app that automates thumbnail creation for image fields."
+readme = "README.md"
+requires-python = ">=3.6"
+license = {text = "MIT"}
+authors = [
+    {name = "Mahadi Hassan", email = "mh@mahadihassan.com"},
+]
+classifiers = [
+    "Environment :: Web Environment",
+    "Framework :: Django",
+    "Framework :: PyneCore :: Plugin",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3.6",
+    "Programming Language :: Python :: 3.7",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Internet :: WWW/HTTP",
+    "Topic :: Internet :: WWW/HTTP :: Dynamic Content",
+]
+dependencies = [
+    "Django>=3.0",
+    "Pillow>=8.0.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/itsmahadi007/django_advance_thumbnail"
+Repository = "https://github.com/itsmahadi007/django_advance_thumbnail"
+Issues = "https://github.com/itsmahadi007/django_advance_thumbnail/issues"
+
+[tool.setuptools]
+include-package-data = true
+
+[tool.setuptools.packages.find]
+where = ["."]
