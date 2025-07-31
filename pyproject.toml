@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "django_advance_thumbnail"
-version = "1.1.1"
+version = "1.1.2"
 description = "A Django app that automates thumbnail creation for image fields."
 readme = "README.md"
 requires-python = ">=3.6"
@@ -15,7 +15,15 @@ authors = [
 classifiers = [
     "Environment :: Web Environment",
     "Framework :: Django",
-    "Framework :: PyneCore :: Plugin",
+    "Framework :: Django :: 3.0",
+    "Framework :: Django :: 3.1",
+    "Framework :: Django :: 3.2",
+    "Framework :: Django :: 4.0",
+    "Framework :: Django :: 4.1",
+    "Framework :: Django :: 4.2",
+    "Framework :: Django :: 5.0",
+    "Framework :: Django :: 5.1",
+    "Framework :: Django :: 5.2",
     "Intended Audience :: Developers",
     "License :: OSI Approved :: MIT License",
     "Operating System :: OS Independent",
