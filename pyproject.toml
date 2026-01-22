@@ -8,7 +8,7 @@ version = "2.0.0"
 description = "A Django app that automates thumbnail creation for image fields."
 readme = "README.md"
 requires-python = ">=3.6"
-license = {text = "MIT"}
+license = "MIT"
 authors = [
     {name = "Mahadi Hassan", email = "mh@mahadihassan.com"},
 ]
@@ -25,7 +25,6 @@ classifiers = [
     "Framework :: Django :: 5.1",
     "Framework :: Django :: 5.2",
     "Intended Audience :: Developers",
-    "License :: OSI Approved :: MIT License",
     "Operating System :: OS Independent",
     "Programming Language :: Python :: 3.6",
     "Programming Language :: Python :: 3.7",
@@ -52,3 +51,4 @@ include-package-data = true
 
 [tool.setuptools.packages.find]
 where = ["."]
+exclude = ["tests", "tests.*"]
