@@ -1,143 +1,203 @@
 # Django Advance Thumbnail
 
-Django Advance Thumbnail is a Django app that automates thumbnail creation for image fields. It generates, updates, and
-deletes thumbnails based on the source image, and allows custom thumbnail sizes.
+A Django app that automates thumbnail creation for image fields. It generates, updates, and deletes thumbnails based on the source image with support for custom sizes and resize methods.
+
+## Features
+
+- Automatic thumbnail generation on model save
+- Thread-safe for multi-threaded/parallel web servers (gunicorn, uwsgi, etc.)
+- Multiple resize methods: `fit` (maintain aspect ratio) or `fill` (exact dimensions)
+- Smart regeneration - only regenerates when source image or settings change
+- Management commands for bulk operations
+- Full Django migrations support
 
 ## Installation
 
-1. Install the package using pip:
-
 ```bash
-pip install django_advance_thumbnail
+pip install django-advance-thumbnail
 ```
 
-> **Note**: Starting from version 1.1.0, this package uses the modern `pyproject.toml` configuration instead of the legacy `setup.cfg`. See [MIGRATION_GUIDE.md](MIGRATION_GUIDE.md) for details.
-
-2. Add `django_advance_thumbnail` to your `INSTALLED_APPS` in `settings.py`:
+Add to `INSTALLED_APPS`:
 
 ```python
 INSTALLED_APPS = [
     # ...
     'django_advance_thumbnail',
-    # ...
 ]
 ```
 
-## Usage
-
-Here's a basic example of how to use the `AdvanceDJThumbnailField` in a model:
+## Quick Start
 
 ```python
 from django.db import models
-
 from django_advance_thumbnail import AdvanceThumbnailField
 
-
-class MyModel(models.Model):
-    image = models.ImageField(upload_to='images/', null=True, blank=True)
-    thumbnail = AdvanceThumbnailField(source_field='image', upload_to='thumbnails/', null=True, blank=True,
-                                      size=(300, 300)) 
-```
-
-In this example, `AdvanceDJThumbnailField` is used to create a `thumbnail` from the `image` field. Whenever an image is
-uploaded or updated, a corresponding thumbnail is automatically generated and stored in the `thumbnail` field. The
-thumbnail's dimensions are determined by the optional `size` parameter, which defaults to `(300, 300)` if not specified.
-
-This setup ensures that the lifecycle of the thumbnail is tied to its source image. If the source image is deleted, the
-associated thumbnail is also removed. This seamless synchronization simplifies image management in your Django models.
-
-## Advanced Features
-
-### Management Commands
-
-#### Generate Thumbnails for Existing Images
-
-When adding `AdvanceThumbnailField` to existing models in production:
-
-```bash
-# Generate thumbnails for all models
-python manage.py generate_thumbnails
-
-# Generate for specific model
-python manage.py generate_thumbnails --model myapp.MyModel
-
-# Force regenerate existing thumbnails
-python manage.py generate_thumbnails --force
-```
-
-#### Regenerate Thumbnails After Size Changes
-
-When you change the `size` parameter:
-
-```bash
-# Regenerate thumbnails with new sizes
-python manage.py regenerate_thumbnails
-
-# Force regenerate all thumbnails
-python manage.py regenerate_thumbnails --force
-```
-
-### Automatic Size Change Detection
-
-The field automatically detects when thumbnail sizes change and regenerates them accordingly:
-
-```python
-class MyModel(models.Model):
-    image = models.ImageField(upload_to='images/', null=True, blank=True)
+class Product(models.Model):
+    image = models.ImageField(upload_to='products/')
     thumbnail = AdvanceThumbnailField(
-        source_field='image', 
-        upload_to='thumbnails/', 
-        null=True, 
+        source_field='image',
+        upload_to='thumbnails/',
+        size=(300, 300),
+        null=True,
         blank=True,
-        size=(400, 400)  # Changed from (300, 300) - will auto-regenerate
     )
 ```
 
-### Smart Regeneration
+## Parameters
 
-By default, thumbnails are only regenerated when:
-- The source image changes (detected automatically)
-- The thumbnail size parameter changes
-- The thumbnail doesn't exist
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `source_field` | str | **required** | Name of the source ImageField |
+| `size` | tuple | `(300, 300)` | Thumbnail dimensions (width, height) |
+| `resize_method` | str | `'fit'` | How to resize: `'fit'`, `'fill'`, or `'cover'` |
+| `force_regenerate` | bool | `False` | Regenerate on every save |
+
+## Resize Methods
+
+### `fit` (default)
+Maintains aspect ratio. Thumbnail fits within the specified size but may be smaller in one dimension.
 
 ```python
+# A 400x100 image with size=(150, 150) becomes 150x37
 thumbnail = AdvanceThumbnailField(
-    source_field='image', 
-    upload_to='thumbnails/', 
-    null=True, 
-    blank=True,
-    size=(300, 300)  # Efficient - only regenerates when needed
+    source_field='image',
+    size=(150, 150),
+    resize_method='fit',  # default
 )
 ```
 
-### Force Regeneration (Override)
-
-Use `force_regenerate=True` only if you need to regenerate thumbnails on every save (not recommended for production):
+### `fill` / `cover`
+Guarantees exact dimensions by cropping. Use this when you need thumbnails to be exactly the specified size.
 
 ```python
+# A 400x100 image with size=(150, 150) becomes exactly 150x150
 thumbnail = AdvanceThumbnailField(
-    source_field='image', 
-    upload_to='thumbnails/', 
-    null=True, 
-    blank=True,
-    size=(300, 300),
-    force_regenerate=True  # Regenerates on every save - use sparingly
+    source_field='image',
+    size=(150, 150),
+    resize_method='fill',  # guarantees 150x150
 )
 ```
 
-For detailed usage instructions, see the [Usage Guide](docs/usage_guide.md).
+## Usage Examples
 
-# Contact
+### Basic Usage
 
-For any questions or feedback, feel free to reach out:
+```python
+from django.db import models
+from django_advance_thumbnail import AdvanceThumbnailField
 
-- Email: [mh@mahadihassan.com](mailto:mh@mahadihassan.com), [me.mahadi10@gmail.com](mailto:me.mahadi10@gmail.com)
-- Github: [@itsmahadi007](https://github.com/itsmahadi007)
-- Linkedin: [Mahadi Hassan](https://linkedin.com/in/mahadi-hassan-4a2239154/)
+class Article(models.Model):
+    image = models.ImageField(upload_to='articles/')
+    thumbnail = AdvanceThumbnailField(
+        source_field='image',
+        upload_to='thumbnails/',
+        size=(300, 300),
+        null=True,
+        blank=True,
+    )
+```
+
+### Multiple Thumbnails
+
+```python
+class Product(models.Model):
+    image = models.ImageField(upload_to='products/')
+
+    # Small thumbnail for listings (fit mode)
+    thumbnail_small = AdvanceThumbnailField(
+        source_field='image',
+        upload_to='thumbnails/small/',
+        size=(100, 100),
+        resize_method='fit',
+    )
+
+    # Large thumbnail for detail page (exact dimensions)
+    thumbnail_large = AdvanceThumbnailField(
+        source_field='image',
+        upload_to='thumbnails/large/',
+        size=(400, 400),
+        resize_method='fill',
+    )
+```
+
+### Using Constants
+
+```python
+from django_advance_thumbnail import AdvanceThumbnailField, RESIZE_FIT, RESIZE_FILL
+
+thumbnail = AdvanceThumbnailField(
+    source_field='image',
+    size=(200, 200),
+    resize_method=RESIZE_FILL,
+)
+```
+
+## Management Commands
+
+### Generate Thumbnails
+
+Generate thumbnails for existing images (use when adding field to existing models):
+
+```bash
+# All models
+python manage.py generate_thumbnails
+
+# Specific model
+python manage.py generate_thumbnails --model myapp.Product
+
+# Force regenerate existing
+python manage.py generate_thumbnails --force
+
+# Preview without changes
+python manage.py generate_thumbnails --dry-run
+```
+
+### Regenerate Thumbnails
+
+Regenerate thumbnails after changing `size` or `resize_method`:
+
+```bash
+# Detect and regenerate changed
+python manage.py regenerate_thumbnails
+
+# Force regenerate all
+python manage.py regenerate_thumbnails --force
+
+# Clear cache first
+python manage.py regenerate_thumbnails --clear-cache
+```
+
+## Smart Regeneration
+
+Thumbnails are only regenerated when:
+- Source image changes
+- `size` parameter changes
+- `resize_method` parameter changes
+- Thumbnail doesn't exist
+
+This is efficient for production - no unnecessary processing.
+
+## Thread Safety
+
+Version 2.0+ is fully thread-safe for multi-threaded web servers like gunicorn and uwsgi. The previous signal disconnect/reconnect pattern has been replaced with instance-level flags.
+
+## Requirements
+
+- Python >= 3.6
+- Django >= 3.0
+- Pillow >= 8.0.0
+
+## Upgrading to v2.0
+
+See [MIGRATION_GUIDE.md](MIGRATION_GUIDE.md) for breaking changes and upgrade instructions.
+
+## Contact
+
+- Email: [mh@mahadihassan.com](mailto:mh@mahadihassan.com)
+- GitHub: [@itsmahadi007](https://github.com/itsmahadi007)
+- LinkedIn: [Mahadi Hassan](https://linkedin.com/in/mahadi-hassan-4a2239154/)
 - Web: [mahadihassan.com](https://mahadihassan.com)
 
-# Credits
+## License
 
-This package was created by Mahadi Hassan. Special thanks to the Django and Python communities for their invaluable
-resources and support.
-
+MIT License

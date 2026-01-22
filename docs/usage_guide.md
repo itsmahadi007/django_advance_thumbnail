@@ -1,145 +1,225 @@
-# django_advance_thumbnail Usage Guide
+# Django Advance Thumbnail - Usage Guide
 
 ## Installation
 
-To install django_advance_thumbnail, you can use pip:
-
 ```bash
-pip install django_advance_thumbnail
+pip install django-advance-thumbnail
 ```
 
-# Basic Usage
+Add to `INSTALLED_APPS`:
 
-The `django_advance_thumbnail` package provides a `AdvanceThumbnailField` that you can use in your Django models. This
-field automatically creates a thumbnail for an image field whenever the image is uploaded or changed.
+```python
+INSTALLED_APPS = [
+    # ...
+    'django_advance_thumbnail',
+]
+```
 
-Here's a basic example of how to use the `AdvanceThumbnailField` in a model:
+## Basic Usage
 
 ```python
 from django.db import models
-
 from django_advance_thumbnail import AdvanceThumbnailField
 
-
 class MyModel(models.Model):
-    image = models.ImageField(upload_to='images/', null=True, blank=True)
-    thumbnail = AdvanceThumbnailField(source_field='image', upload_to='thumbnails/', null=True, blank=True,
-                                      size=(300, 300))
-
-```
-
-In this example, a thumbnail of `image` will be automatically created and saved to `thumbnail` whenever `image` is uploaded or changed. If `image` is deleted, `thumbnail` will be deleted as well.
-The `size` parameter is optional and defaults to `(300, 300)`. It determines the size of the thumbnail if specified.
-
-## Advanced Features
-
-### Smart Regeneration (Default Behavior)
-
-By default, the field intelligently regenerates thumbnails only when necessary:
-
-```python
-class MyModel(models.Model):
-    image = models.ImageField(upload_to='images/', null=True, blank=True)
+    image = models.ImageField(upload_to='images/')
     thumbnail = AdvanceThumbnailField(
-        source_field='image', 
-        upload_to='thumbnails/', 
-        null=True, 
-        blank=True,
-        size=(300, 300)  # Automatically detects changes
-    )
-```
-
-**Thumbnails are regenerated only when:**
-- The source image file changes (name, size, or content)
-- The thumbnail size parameter is modified
-- The thumbnail file doesn't exist
-
-### Force Regeneration (Override)
-
-Use `force_regenerate=True` sparingly, only when you need thumbnails regenerated on every model save:
-
-```python
-class MyModel(models.Model):
-    image = models.ImageField(upload_to='images/', null=True, blank=True)
-    thumbnail = AdvanceThumbnailField(
-        source_field='image', 
-        upload_to='thumbnails/', 
-        null=True, 
-        blank=True,
+        source_field='image',
+        upload_to='thumbnails/',
         size=(300, 300),
-        force_regenerate=True  # Not recommended for production
+        null=True,
+        blank=True,
     )
 ```
 
-**Note:** `force_regenerate=True` can impact performance as it processes images on every save, regardless of whether the source image changed.
+A thumbnail of `image` is automatically created and saved to `thumbnail` whenever `image` is uploaded or changed. If `image` is deleted, `thumbnail` is deleted as well.
 
-### Automatic Size Change Detection
+## Parameters
 
-The field automatically detects when the `size` parameter has been changed and regenerates existing thumbnails accordingly. This is useful when you need to update thumbnail sizes in production.
+| Parameter | Type | Default | Required | Description |
+|-----------|------|---------|----------|-------------|
+| `source_field` | str | - | **Yes** | Name of the source ImageField |
+| `size` | tuple | `(300, 300)` | No | Thumbnail dimensions (width, height) |
+| `resize_method` | str | `'fit'` | No | How to resize: `'fit'`, `'fill'`, or `'cover'` |
+| `force_regenerate` | bool | `False` | No | Regenerate thumbnail on every save |
+
+## Resize Methods
+
+### `fit` (default)
+
+Maintains aspect ratio. The thumbnail fits within the specified size but may be smaller in one dimension.
+
+```python
+thumbnail = AdvanceThumbnailField(
+    source_field='image',
+    size=(150, 150),
+    resize_method='fit',
+)
+```
+
+**Examples:**
+- 400x100 image → 150x37 (width limited)
+- 100x400 image → 37x150 (height limited)
+- 300x300 image → 150x150 (square stays square)
+
+### `fill` / `cover`
+
+Guarantees exact dimensions by scaling and cropping. Use when you need thumbnails to be exactly the specified size.
+
+```python
+thumbnail = AdvanceThumbnailField(
+    source_field='image',
+    size=(150, 150),
+    resize_method='fill',
+)
+```
+
+**Examples:**
+- 400x100 image → 150x150 (crops width)
+- 100x400 image → 150x150 (crops height)
+- 300x300 image → 150x150
+
+### Using Constants
+
+```python
+from django_advance_thumbnail import (
+    AdvanceThumbnailField,
+    RESIZE_FIT,
+    RESIZE_FILL,
+    RESIZE_COVER,  # alias for RESIZE_FILL
+)
+
+thumbnail = AdvanceThumbnailField(
+    source_field='image',
+    size=(200, 200),
+    resize_method=RESIZE_FILL,
+)
+```
+
+## Smart Regeneration
+
+By default, thumbnails are only regenerated when necessary:
+
+- Source image changes (name, size, or content)
+- `size` parameter is modified
+- `resize_method` parameter is modified
+- Thumbnail file doesn't exist
+
+```python
+class MyModel(models.Model):
+    image = models.ImageField(upload_to='images/')
+    thumbnail = AdvanceThumbnailField(
+        source_field='image',
+        size=(300, 300),  # Efficient - only regenerates when needed
+    )
+```
+
+## Force Regeneration
+
+Use `force_regenerate=True` only when you need thumbnails regenerated on every model save:
+
+```python
+thumbnail = AdvanceThumbnailField(
+    source_field='image',
+    size=(300, 300),
+    force_regenerate=True,  # Not recommended for production
+)
+```
+
+**Warning:** This impacts performance as it processes images on every save.
+
+## Multiple Thumbnails
+
+You can have multiple thumbnail fields from the same source:
+
+```python
+class Product(models.Model):
+    image = models.ImageField(upload_to='products/')
+
+    # Small for listings
+    thumbnail_small = AdvanceThumbnailField(
+        source_field='image',
+        upload_to='thumbnails/small/',
+        size=(100, 100),
+        resize_method='fit',
+    )
+
+    # Medium for cards
+    thumbnail_medium = AdvanceThumbnailField(
+        source_field='image',
+        upload_to='thumbnails/medium/',
+        size=(300, 300),
+        resize_method='fill',
+    )
+
+    # Large for detail pages
+    thumbnail_large = AdvanceThumbnailField(
+        source_field='image',
+        upload_to='thumbnails/large/',
+        size=(600, 600),
+        resize_method='fill',
+    )
+```
 
 ## Management Commands
 
-### Generate Thumbnails for Existing Images
+### Generate Thumbnails
 
-When you add `AdvanceThumbnailField` to an existing model in production, you can generate thumbnails for all existing images using the `generate_thumbnails` management command:
+Generate thumbnails for existing images (use when adding field to existing models):
 
 ```bash
-# Generate thumbnails for all models with AdvanceThumbnailField
+# All models with AdvanceThumbnailField
 python manage.py generate_thumbnails
 
-# Generate thumbnails for a specific model
+# Specific model
 python manage.py generate_thumbnails --model myapp.MyModel
 
-# Generate thumbnails for a specific field in a model
+# Specific field
 python manage.py generate_thumbnails --model myapp.MyModel --field thumbnail
 
-# Force regenerate thumbnails even if they already exist
+# Force regenerate existing thumbnails
 python manage.py generate_thumbnails --force
 
-# Dry run to see what would be done without actually generating thumbnails
+# Preview without changes
 python manage.py generate_thumbnails --dry-run
 ```
 
-### Regenerate Thumbnails After Size Changes
+### Regenerate Thumbnails
 
-When you change the `size` parameter of an `AdvanceThumbnailField`, you can regenerate all existing thumbnails with the new size using the `regenerate_thumbnails` management command:
+Regenerate thumbnails after changing `size` or `resize_method`:
 
 ```bash
-# Regenerate thumbnails for fields where size has changed
+# Detect and regenerate changed configurations
 python manage.py regenerate_thumbnails
 
-# Force regenerate all thumbnails regardless of size changes
+# Force regenerate all thumbnails
 python manage.py regenerate_thumbnails --force
 
-# Regenerate thumbnails for a specific model
+# Specific model
 python manage.py regenerate_thumbnails --model myapp.MyModel
 
-# Regenerate thumbnails for a specific field
-python manage.py regenerate_thumbnails --model myapp.MyModel --field thumbnail
-
-# Clear the size cache to force detection of size changes
+# Clear cache to force detection
 python manage.py regenerate_thumbnails --clear-cache
 
-# Dry run to see what would be done
+# Preview
 python manage.py regenerate_thumbnails --dry-run
 ```
 
-## Use Cases
+## Common Use Cases
 
-### Adding Thumbnail Field to Existing Production Model
+### Adding Thumbnail Field to Existing Model
 
-1. Add the `AdvanceThumbnailField` to your model:
+1. Add the field:
    ```python
    class Article(models.Model):
        title = models.CharField(max_length=200)
-       image = models.ImageField(upload_to='articles/', null=True, blank=True)
-       # Add this field
+       image = models.ImageField(upload_to='articles/')
        thumbnail = AdvanceThumbnailField(
-           source_field='image', 
-           upload_to='thumbnails/', 
-           null=True, 
+           source_field='image',
+           upload_to='thumbnails/',
+           size=(300, 300),
+           null=True,
            blank=True,
-           size=(300, 300)
        )
    ```
 
@@ -154,36 +234,60 @@ python manage.py regenerate_thumbnails --dry-run
    python manage.py generate_thumbnails --model myapp.Article
    ```
 
-### Changing Thumbnail Size in Production
+### Changing Thumbnail Size
 
-1. Update the size in your model:
+1. Update the size:
    ```python
    thumbnail = AdvanceThumbnailField(
-       source_field='image', 
-       upload_to='thumbnails/', 
-       null=True, 
-       blank=True,
-       size=(400, 400)  # Changed from (300, 300)
+       source_field='image',
+       size=(400, 400),  # Changed from (300, 300)
    )
    ```
 
-2. Regenerate thumbnails with new size:
+2. Regenerate:
    ```bash
    python manage.py regenerate_thumbnails --model myapp.Article
    ```
 
-## Performance Considerations
+### Switching from `fit` to `fill`
 
-- Thumbnail generation happens automatically on model save, which may impact performance for large images
-- Use the management commands during off-peak hours for bulk operations
-- Consider using `--dry-run` first to estimate the scope of work
-- The size change detection uses Django's cache framework, ensure your cache is properly configured
+1. Update the resize method:
+   ```python
+   thumbnail = AdvanceThumbnailField(
+       source_field='image',
+       size=(150, 150),
+       resize_method='fill',  # Changed from 'fit'
+   )
+   ```
 
-# Contact
+2. Regenerate:
+   ```bash
+   python manage.py regenerate_thumbnails --model myapp.Article
+   ```
 
-For any questions or feedback, feel free to reach out:
+## Performance Tips
 
-- Email: [mh@mahadihassan.com](mailto:mh@mahadihassan.com), [me.mahadi10@gmail.com](mailto:me.mahadi10@gmail.com)
-- Github: [@itsmahadi007](https://github.com/itsmahadi007)
-- Linkedin: [Mahadi Hassan](https://linkedin.com/in/mahadi-hassan-4a2239154/)
+- Use smart regeneration (default) - avoids unnecessary processing
+- Run management commands during off-peak hours for bulk operations
+- Use `--dry-run` first to estimate scope
+- Configure Django's cache framework for efficient change detection
+- Avoid `force_regenerate=True` in production
+
+## Thread Safety
+
+Version 2.0+ is fully thread-safe for multi-threaded web servers (gunicorn, uwsgi, etc.). Thumbnail generation uses instance-level flags instead of global signal manipulation.
+
+## Supported Image Formats
+
+- JPEG (.jpg, .jpeg)
+- PNG (.png) - with transparency handling
+- WebP (.webp)
+
+RGBA images are automatically converted to RGB when saving as JPEG.
+
+## Contact
+
+- Email: [mh@mahadihassan.com](mailto:mh@mahadihassan.com)
+- GitHub: [@itsmahadi007](https://github.com/itsmahadi007)
+- LinkedIn: [Mahadi Hassan](https://linkedin.com/in/mahadi-hassan-4a2239154/)
 - Web: [mahadihassan.com](https://mahadihassan.com)
