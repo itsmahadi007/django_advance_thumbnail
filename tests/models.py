@@ -7,6 +7,7 @@ from django_advance_thumbnail import AdvanceThumbnailField, RESIZE_FIT, RESIZE_F
 
 class TestImageModel(models.Model):
     """Basic test model with default settings"""
+    title = models.CharField(max_length=100, blank=True, default='')
     image = models.ImageField(upload_to='test_images/')
     thumbnail = AdvanceThumbnailField(
         source_field='image',
