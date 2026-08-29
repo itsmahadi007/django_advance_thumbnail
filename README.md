@@ -177,6 +177,14 @@ Thumbnails are only regenerated when:
 
 This is efficient for production - no unnecessary processing.
 
+Change detection uses the cache as a fast path only. A cache miss - a restart,
+an eviction, or a per-process backend such as `LocMemCache` - falls back to
+comparing the stored thumbnail name against the current source, so restarts and
+extra workers do not produce duplicate thumbnails. Because that fallback only
+sees filenames, a source replaced under its existing name is not detected
+without a working shared cache; run `regenerate_thumbnails --force` in that
+case.
+
 ## Thread Safety
 
 Version 2.0+ is fully thread-safe for multi-threaded web servers like gunicorn and uwsgi. The previous signal disconnect/reconnect pattern has been replaced with instance-level flags.

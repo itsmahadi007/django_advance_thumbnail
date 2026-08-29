@@ -175,13 +175,25 @@ class AdvanceThumbnailField(models.ImageField):
             logger.debug(f"Could not store field config in cache: {e}")
 
     def _should_regenerate_thumbnail(self, instance):
-        """Check if thumbnail should be regenerated due to size or method change"""
+        """Check if thumbnail should be regenerated due to size or method change.
+
+        A missing cache entry means the previous configuration is *unknown*, not
+        that it changed, so it never forces a regeneration. Run the
+        ``regenerate_thumbnails`` management command after changing ``size`` or
+        ``resize_method``.
+        """
         try:
             cached_config = cache.get(self._cache_key)
             current_config = {
                 'size': self.size,
                 'resize_method': self.resize_method,
             }
+
+            if cached_config is None:
+                # No previous config to compare against (restart, eviction, or a
+                # process-local cache). Record the current one and move on.
+                self._store_field_config()
+                return False
 
             if cached_config != current_config:
                 # Config has changed, update cache and return True
@@ -192,7 +204,15 @@ class AdvanceThumbnailField(models.ImageField):
         return False
 
     def _has_source_image_changed(self, instance):
-        """Check if the source image has changed since last thumbnail generation"""
+        """Check if the source image has changed since last thumbnail generation.
+
+        The cache is only a fast path, never the source of truth. When the entry
+        is missing or unreadable (restart, eviction, a different worker, or a
+        process-local backend such as LocMemCache) the answer is derived from
+        durable state instead: a stored thumbnail whose name matches the one
+        that would be derived from the current source was already generated from
+        it, so nothing changed.
+        """
         source_field = getattr(instance, self.source_field_name, None)
         if not source_field or not source_field.name:
             return False
@@ -201,26 +221,66 @@ class AdvanceThumbnailField(models.ImageField):
         source_cache_key = self._get_source_cache_key(instance)
 
         try:
-            # Get current source image info
-            current_info = {
-                'name': source_field.name,
-                'size': source_field.size if hasattr(source_field, 'size') else None,
-            }
-
-            # Get cached source image info
             cached_info = cache.get(source_cache_key)
-
-            # If no cached info exists, this is a new image
-            if cached_info is None:
-                return True
-
-            # Compare current and cached info
-            return current_info != cached_info
-
         except Exception as e:
-            logger.debug(f"Could not check source image from cache: {e}")
-            # If cache fails, assume image has changed to be safe
-            return True
+            logger.debug(f"Could not read source image info from cache: {e}")
+            cached_info = None
+
+        if cached_info is not None:
+            try:
+                return self._get_source_image_info(source_field) != cached_info
+            except Exception as e:
+                logger.debug(f"Could not read current source image info: {e}")
+
+        # Cache miss: fall back to the durable state stored on the instance.
+        if self._thumbnail_matches_source(instance, source_field):
+            # Warm the cache so later saves take the fast path again.
+            self._store_source_image_info(instance, source_field)
+            return False
+
+        return True
+
+    def _thumbnail_matches_source(self, instance, source_field):
+        """Whether the stored thumbnail was derived from the current source name.
+
+        Thumbnail names are built as ``<source stem>_thumbnail<source ext>``, so
+        the stored name tells us which source a thumbnail came from without any
+        cache. Storage backends may append a suffix to avoid collisions, so the
+        stem is matched as a prefix.
+
+        Only the basename is available, so with a cold cache this cannot tell
+        apart two sources sharing a filename (a source replaced in place, or the
+        same filename under a different ``upload_to`` directory). A working
+        shared cache still catches both; otherwise use
+        ``regenerate_thumbnails --force``.
+        """
+        thumbnail_field = getattr(instance, self.name, None)
+        if not thumbnail_field or not thumbnail_field.name:
+            return False
+
+        source_stem, source_extension = os.path.splitext(
+            os.path.basename(source_field.name)
+        )
+        thumbnail_stem, thumbnail_extension = os.path.splitext(
+            os.path.basename(thumbnail_field.name)
+        )
+
+        if thumbnail_extension.lower() != source_extension.lower():
+            return False
+
+        expected_stem = f"{source_stem}_thumbnail"
+        return (
+            thumbnail_stem == expected_stem
+            or thumbnail_stem.startswith(f"{expected_stem}_")
+        )
+
+    @staticmethod
+    def _get_source_image_info(source_field):
+        """Snapshot of the source image used for change detection"""
+        return {
+            'name': source_field.name,
+            'size': source_field.size if hasattr(source_field, 'size') else None,
+        }
 
     def _get_source_cache_key(self, instance):
         """Generate cache key for source image info"""
@@ -237,10 +297,7 @@ class AdvanceThumbnailField(models.ImageField):
         source_cache_key = self._get_source_cache_key(instance)
 
         try:
-            source_info = {
-                'name': source_field.name,
-                'size': source_field.size if hasattr(source_field, 'size') else None,
-            }
+            source_info = self._get_source_image_info(source_field)
             cache.set(source_cache_key, source_info, timeout=None)
         except Exception as e:
             logger.debug(f"Could not store source image info in cache: {e}")

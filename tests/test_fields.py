@@ -4,6 +4,7 @@ Tests for AdvanceThumbnailField core functionality
 import pytest
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.core.cache import cache
+from django.test import override_settings
 from PIL import Image
 
 from tests.models import (
@@ -197,6 +198,172 @@ class TestCacheChangeDetection:
         obj.refresh_from_db()
         # Thumbnail name should be the same (no regeneration)
         # Note: exact behavior depends on cache state
+
+
+@pytest.mark.django_db
+class TestCacheMissBehavior:
+    """A cache miss must not be mistaken for a changed source or config.
+
+    Regression tests for https://github.com/itsmahadi007/django_advance_thumbnail/issues/9
+    """
+
+    def test_no_regeneration_after_cache_clear(self, temp_media_root, create_test_image):
+        """Clearing the cache must not regenerate an up-to-date thumbnail"""
+        image_buffer = create_test_image()
+        image_file = SimpleUploadedFile('photo.jpg', image_buffer.read(), content_type='image/jpeg')
+
+        obj = TestImageModel.objects.create(image=image_file)
+        obj.refresh_from_db()
+        original_thumbnail = obj.thumbnail.name
+
+        # Simulates a restart, an eviction, or another LocMemCache worker
+        cache.clear()
+
+        obj.title = 'Updated'
+        obj.save()
+        obj.refresh_from_db()
+
+        assert obj.thumbnail.name == original_thumbnail
+
+    def test_no_regeneration_across_repeated_cache_clears(self, temp_media_root, create_test_image):
+        """Repeated cache misses must not pile up duplicate thumbnails"""
+        image_buffer = create_test_image()
+        image_file = SimpleUploadedFile('photo.jpg', image_buffer.read(), content_type='image/jpeg')
+
+        obj = TestImageModel.objects.create(image=image_file)
+        obj.refresh_from_db()
+        original_thumbnail = obj.thumbnail.name
+
+        for _ in range(3):
+            cache.clear()
+            obj.save()
+            obj.refresh_from_db()
+
+        assert obj.thumbnail.name == original_thumbnail
+
+    def test_source_change_still_detected_after_cache_clear(self, temp_media_root, create_test_image):
+        """A genuine source change must still be detected with a cold cache"""
+        image1 = create_test_image(width=200, height=200)
+        file1 = SimpleUploadedFile('first.jpg', image1.read(), content_type='image/jpeg')
+
+        obj = TestImageModel.objects.create(image=file1)
+        obj.refresh_from_db()
+        first_thumbnail = obj.thumbnail.name
+
+        cache.clear()
+
+        image2 = create_test_image(width=300, height=300)
+        file2 = SimpleUploadedFile('second.jpg', image2.read(), content_type='image/jpeg')
+        obj.image = file2
+        obj.save()
+        obj.refresh_from_db()
+
+        assert obj.thumbnail.name != first_thumbnail
+        assert 'second_thumbnail' in obj.thumbnail.name
+
+    def test_missing_thumbnail_still_generated_with_cold_cache(self, temp_media_root, create_test_image):
+        """A missing thumbnail must still be generated when the cache is cold"""
+        image_buffer = create_test_image()
+        image_file = SimpleUploadedFile('photo.jpg', image_buffer.read(), content_type='image/jpeg')
+
+        obj = TestImageModel.objects.create(image=image_file)
+        obj.refresh_from_db()
+
+        # Drop the thumbnail without touching the source
+        TestImageModel.objects.filter(pk=obj.pk).update(thumbnail='')
+        obj.refresh_from_db()
+        assert not obj.thumbnail
+
+        cache.clear()
+        obj.save()
+        obj.refresh_from_db()
+
+        assert obj.thumbnail
+        assert 'photo_thumbnail' in obj.thumbnail.name
+
+    def test_cache_is_repopulated_after_a_miss(self, temp_media_root, create_test_image):
+        """A cache miss resolved from durable state should warm the cache again"""
+        image_buffer = create_test_image()
+        image_file = SimpleUploadedFile('photo.jpg', image_buffer.read(), content_type='image/jpeg')
+
+        obj = TestImageModel.objects.create(image=image_file)
+        obj.refresh_from_db()
+
+        field = TestImageModel._meta.get_field('thumbnail')
+        cache.clear()
+        assert cache.get(field._get_source_cache_key(obj)) is None
+
+        assert field._has_source_image_changed(obj) is False
+        assert cache.get(field._get_source_cache_key(obj)) is not None
+
+    def test_missing_config_cache_is_not_a_config_change(self, temp_media_root, create_test_image):
+        """An absent config entry means 'unknown', not 'changed'"""
+        image_buffer = create_test_image()
+        image_file = SimpleUploadedFile('photo.jpg', image_buffer.read(), content_type='image/jpeg')
+
+        obj = TestImageModel.objects.create(image=image_file)
+        field = TestImageModel._meta.get_field('thumbnail')
+
+        cache.clear()
+
+        assert field._should_regenerate_thumbnail(obj) is False
+        # ...and the current config is recorded for later comparisons
+        assert cache.get(field._cache_key) == {
+            'size': field.size,
+            'resize_method': field.resize_method,
+        }
+
+    def test_changed_config_still_triggers_regeneration(self, temp_media_root, create_test_image):
+        """A genuinely different cached config must still be detected"""
+        image_buffer = create_test_image()
+        image_file = SimpleUploadedFile('photo.jpg', image_buffer.read(), content_type='image/jpeg')
+
+        obj = TestImageModel.objects.create(image=image_file)
+        field = TestImageModel._meta.get_field('thumbnail')
+
+        cache.set(field._cache_key, {'size': (50, 50), 'resize_method': 'fit'}, timeout=None)
+
+        assert field._should_regenerate_thumbnail(obj) is True
+
+    @override_settings(
+        CACHES={'default': {'BACKEND': 'django.core.cache.backends.dummy.DummyCache'}}
+    )
+    def test_no_regeneration_without_a_working_cache(self, temp_media_root, create_test_image):
+        """A backend that stores nothing must not regenerate on every save"""
+        image_buffer = create_test_image()
+        image_file = SimpleUploadedFile('photo.jpg', image_buffer.read(), content_type='image/jpeg')
+
+        obj = TestImageModel.objects.create(image=image_file)
+        obj.refresh_from_db()
+        original_thumbnail = obj.thumbnail.name
+
+        obj.title = 'Updated'
+        obj.save()
+        obj.refresh_from_db()
+
+        assert obj.thumbnail.name == original_thumbnail
+
+    @override_settings(
+        CACHES={'default': {'BACKEND': 'django.core.cache.backends.dummy.DummyCache'}}
+    )
+    def test_source_change_detected_without_a_working_cache(self, temp_media_root, create_test_image):
+        """A source change must still be detected without any usable cache"""
+        file1 = SimpleUploadedFile(
+            'first.jpg', create_test_image().read(), content_type='image/jpeg'
+        )
+        obj = TestImageModel.objects.create(image=file1)
+        obj.refresh_from_db()
+
+        file2 = SimpleUploadedFile(
+            'second.jpg',
+            create_test_image(width=500, height=500).read(),
+            content_type='image/jpeg',
+        )
+        obj.image = file2
+        obj.save()
+        obj.refresh_from_db()
+
+        assert 'second_thumbnail' in obj.thumbnail.name
 
 
 @pytest.mark.django_db
