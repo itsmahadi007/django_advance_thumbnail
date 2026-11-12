@@ -25,8 +25,8 @@ jobs:
           - { python: "3.13", django: "6.0", pillow: "latest" }
           - { python: "3.14", django: "latest", pillow: "latest" }
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
         with:
           python-version: ${{ matrix.python }}
       - name: Install dependencies
