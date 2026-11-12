@@ -3,7 +3,7 @@
 All notable changes to this project are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project uses [Semantic Versioning](https://semver.org/).
 
-## [2.0.2] - Unreleased
+## [2.0.2] - 2026-11-12
 
 ### Fixed
 - Thumbnails were silently not generated on Pillow 8.0 – 9.0. The code used `Image.Resampling`, which only exists from Pillow 9.1, and the error was only logged. The field now picks the LANCZOS filter in a way that works on every supported Pillow version.
@@ -39,5 +39,5 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 **June 2024 (1.0.1 – 1.0.2)**
 - EXIF orientation handling and improved thumbnail generation.
 
-[2.0.2]: https://github.com/itsmahadi007/django_advance_thumbnail/compare/v2.0.1...HEAD
+[2.0.2]: https://github.com/itsmahadi007/django_advance_thumbnail/releases/tag/v2.0.2
 [2.0.1]: https://github.com/itsmahadi007/django_advance_thumbnail/releases/tag/v2.0.1
