@@ -4,15 +4,17 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "django_advance_thumbnail"
-version = "2.0.1"
-description = "A Django app that automates thumbnail creation for image fields."
+version = "2.0.2"
+description = "Automatic, stored image thumbnails for Django models: one model field that creates, updates and deletes thumbnails on save (fit or fill/crop), thread-safe, no template tags."
 readme = "README.md"
 requires-python = ">=3.6"
 license = "MIT"
+keywords = ["django", "thumbnail", "thumbnails", "image", "imagefield", "model field", "pillow", "resize", "crop", "image processing"]
 authors = [
     {name = "Mahadi Hassan", email = "mh@mahadihassan.com"},
 ]
 classifiers = [
+    "Development Status :: 5 - Production/Stable",
     "Environment :: Web Environment",
     "Framework :: Django",
     "Framework :: Django :: 3.0",
@@ -24,6 +26,8 @@ classifiers = [
     "Framework :: Django :: 5.0",
     "Framework :: Django :: 5.1",
     "Framework :: Django :: 5.2",
+    "Framework :: Django :: 6.0",
+    "Framework :: Django :: 6.1",
     "Intended Audience :: Developers",
     "Operating System :: OS Independent",
     "Programming Language :: Python :: 3.6",
@@ -33,8 +37,12 @@ classifiers = [
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
+    "Programming Language :: Python :: 3 :: Only",
     "Topic :: Internet :: WWW/HTTP",
     "Topic :: Internet :: WWW/HTTP :: Dynamic Content",
+    "Topic :: Multimedia :: Graphics",
 ]
 dependencies = [
     "Django>=3.0",
@@ -44,6 +52,8 @@ dependencies = [
 [project.urls]
 Homepage = "https://github.com/itsmahadi007/django_advance_thumbnail"
 Repository = "https://github.com/itsmahadi007/django_advance_thumbnail"
+Documentation = "https://github.com/itsmahadi007/django_advance_thumbnail#readme"
+Changelog = "https://github.com/itsmahadi007/django_advance_thumbnail/blob/main/CHANGELOG.md"
 Issues = "https://github.com/itsmahadi007/django_advance_thumbnail/issues"
 
 [tool.setuptools]

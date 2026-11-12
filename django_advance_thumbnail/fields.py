@@ -17,6 +17,15 @@ RESIZE_COVER = 'cover'  # Scale to cover size, then crop center (alias for fill)
 VALID_RESIZE_METHODS = (RESIZE_FIT, RESIZE_FILL, RESIZE_COVER)
 
 
+def _lanczos():
+    """LANCZOS filter on every supported Pillow version.
+
+    ``Image.Resampling`` was added in Pillow 9.1; older releases (still
+    supported, see ``Pillow>=8.0`` in pyproject) only have ``Image.LANCZOS``.
+    """
+    return getattr(Image, 'Resampling', Image).LANCZOS
+
+
 class AdvanceThumbnailField(models.ImageField):
     """
     Custom ImageField that automatically generates thumbnails from a source image.
@@ -316,11 +325,11 @@ class AdvanceThumbnailField(models.ImageField):
             # Resize based on method
             if self.resize_method in (RESIZE_FILL, RESIZE_COVER):
                 # Fill/cover: crop to exact dimensions (guarantees size)
-                img_copy = ImageOps.fit(img, self.size, Image.Resampling.LANCZOS)
+                img_copy = ImageOps.fit(img, self.size, _lanczos())
             else:
                 # Fit: maintain aspect ratio, fit within size (may be smaller)
                 img_copy = img.copy()
-                img_copy.thumbnail(self.size, Image.Resampling.LANCZOS)
+                img_copy.thumbnail(self.size, _lanczos())
 
             filename, extension = os.path.splitext(os.path.basename(source_field.name))
             thumbnail_filename = f"{filename}_thumbnail{extension}"
