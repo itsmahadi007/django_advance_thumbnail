@@ -12,13 +12,14 @@ permissions:
 jobs:
   test:
     name: py${{ matrix.python }} · Django ${{ matrix.django }} · Pillow ${{ matrix.pillow }}
-    runs-on: ubuntu-latest
+    # Python 3.9 has no build for newer Ubuntu images, so its job pins an older runner.
+    runs-on: ${{ matrix.os || 'ubuntu-latest' }}
     strategy:
       fail-fast: false
       matrix:
         include:
           # Oldest supported Pillow (no Image.Resampling) on the oldest testable stack
-          - { python: "3.9",  django: "3.2", pillow: "8.4" }
+          - { python: "3.9",  django: "3.2", pillow: "8.4", os: "ubuntu-24.04" }
           - { python: "3.10", django: "4.2", pillow: "9.0" }
           - { python: "3.11", django: "4.2", pillow: "9.5" }
           - { python: "3.12", django: "5.2", pillow: "latest" }
