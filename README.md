@@ -26,6 +26,14 @@
   <a href="#production-notes">Production notes</a>
 </p>
 
+<p align="center">
+  <a href="https://www.youtube.com/watch?v=T3I9xqpubjg"><img src="https://raw.githubusercontent.com/itsmahadi007/django_advance_thumbnail/main/docs/assets/video.jpg" alt="Watch on YouTube: Why your AI-built shop is slow on phones" width="640"></a>
+  <br>
+  <sub><a href="https://www.youtube.com/watch?v=T3I9xqpubjg"><strong>Watch (2:46): Why your AI-built shop is slow on phones</strong></a></sub>
+  <br>
+  <sub>Built your app with an AI assistant? Tell it: <em>"Use django-advance-thumbnail to add thumbnails to my product images."</em></sub>
+</p>
+
 ---
 
 ## Why this library
