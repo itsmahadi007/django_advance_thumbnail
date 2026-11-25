@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "django_advance_thumbnail"
-version = "2.0.2"
+version = "2.0.3"
 description = "Automatic, stored image thumbnails for Django models: one model field that creates, updates and deletes thumbnails on save (fit or fill/crop), thread-safe, no template tags."
 readme = "README.md"
 requires-python = ">=3.6"

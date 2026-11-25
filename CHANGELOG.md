@@ -3,6 +3,15 @@
 All notable changes to this project are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project uses [Semantic Versioning](https://semver.org/).
 
+## [2.0.3] - 2026-11-25
+
+### Fixed
+- `regenerate_thumbnails` now rebuilds thumbnails after `size` or `resize_method` changes. Before, the field stored its new config in the cache when the model loaded, so the command always reported "No config change detected" and only `--force` worked. The command (and `AdvanceThumbnailField.regenerate_thumbnails()`) now compares each stored thumbnail's real dimensions with what the current config produces, and rebuilds only the ones that differ or are missing. EXIF-rotated photos and sources smaller than `size` are handled.
+- Two thumbnail fields of the same image no longer share a file name. Thumbnails are now named `<image>_<field name>` (unchanged for fields called `thumbnail`), so storage that overwrites same-named files, such as S3 in django-storages, can no longer make both fields point at one file. Thumbnails made by older versions are still recognised, so nothing is rebuilt on upgrade.
+
+### Changed
+- Docs (README, llms.txt, migration guide) no longer say that saving a row rebuilds its thumbnail after a config change; that never happened.
+
 ## [2.0.2] - 2026-11-12
 
 ### Fixed

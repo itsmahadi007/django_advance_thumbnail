@@ -43,11 +43,12 @@ Verify: save an instance with an image, then check that `obj.thumbnail` is set a
 ## Commands
 
 - `python manage.py generate_thumbnails [--model app.Model] [--field name] [--force] [--dry-run]`: create missing thumbnails.
-- `python manage.py regenerate_thumbnails [--model app.Model] [--field name] [--force] [--clear-cache] [--dry-run]`: rebuild after changing `size` or `resize_method`.
+- `python manage.py regenerate_thumbnails [--model app.Model] [--field name] [--force] [--clear-cache] [--dry-run]`: rebuild thumbnails whose size no longer matches `size` / `resize_method` (checked from the image files), plus missing ones. `--force` rebuilds all.
 
 ## Gotchas
 
-- After changing `size` or `resize_method`, run `regenerate_thumbnails`. Existing rows are only rebuilt when saved again.
+- After changing `size` or `resize_method`, run `regenerate_thumbnails` (2.0.3+). Saving a row does not rebuild for a config change. On 2.0.2 and older the plain command skips everything: use `regenerate_thumbnails --force`.
+- Several thumbnail fields of one image may share an `upload_to` folder: files are named `<image>_<field name>` (2.0.3+). On 2.0.2 and older, give each field its own folder.
 - Change detection uses Django's cache as a fast path and falls back to comparing filenames. If a source file is replaced under the same name with no shared cache (Redis, Memcached), run `regenerate_thumbnails --force`.
 - Upgrading from 1.x: `source_field` is now required and `regenerate_thumbnails()` returns `(count, errors)`.
 
