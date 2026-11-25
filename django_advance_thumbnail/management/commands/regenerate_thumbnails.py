@@ -8,7 +8,10 @@ logger = logging.getLogger(__name__)
 
 
 class Command(BaseCommand):
-    help = 'Regenerate thumbnails when size or resize_method parameters have changed'
+    help = (
+        'Rebuild thumbnails that no longer match their field\'s size or resize_method '
+        '(checked from the image files), plus any that are missing'
+    )
 
     def add_arguments(self, parser):
         parser.add_argument(
@@ -24,12 +27,12 @@ class Command(BaseCommand):
         parser.add_argument(
             '--force',
             action='store_true',
-            help='Force regenerate all thumbnails regardless of config changes'
+            help='Rebuild every thumbnail, even ones that already match the config'
         )
         parser.add_argument(
             '--clear-cache',
             action='store_true',
-            help='Clear config cache to force detection of changes'
+            help='Clear the cached field config (detection no longer depends on it)'
         )
         parser.add_argument(
             '--dry-run',
@@ -78,16 +81,6 @@ class Command(BaseCommand):
                 resize_info = f"size={thumbnail_field.size}, method={thumbnail_field.resize_method}"
                 self.stdout.write(f"  Field: {thumbnail_field.name} ({resize_info})")
 
-                # Check if config has changed
-                config_changed = self._has_config_changed(thumbnail_field)
-
-                if not force and not config_changed:
-                    self.stdout.write(f"    No config change detected, skipping (use --force to regenerate anyway)")
-                    continue
-
-                if config_changed:
-                    self.stdout.write(f"    Config change detected!")
-
                 queryset = model_class.objects.all()
 
                 # Filter objects that have source images
@@ -105,11 +98,16 @@ class Command(BaseCommand):
 
                 processed = 0
                 regenerated = 0
+                up_to_date = 0
                 errors = 0
 
                 for instance in queryset:
                     total_processed += 1
                     processed += 1
+
+                    if not force and thumbnail_field._thumbnail_matches_config(instance):
+                        up_to_date += 1
+                        continue
 
                     if dry_run:
                         self.stdout.write(f"    Would regenerate thumbnail for {instance.pk}")
@@ -137,7 +135,9 @@ class Command(BaseCommand):
                         instance._generating_thumbnail = False
 
                 if not dry_run:
-                    self.stdout.write(f"    Regenerated {regenerated}/{processed} thumbnails")
+                    self.stdout.write(
+                        f"    Regenerated {regenerated}/{processed} thumbnails ({up_to_date} already up to date)"
+                    )
                     if errors:
                         self.stdout.write(self.style.WARNING(f"    {errors} errors occurred"))
                     # Update the cache with new config
@@ -170,18 +170,6 @@ class Command(BaseCommand):
                 models_with_fields[model_class] = thumbnail_fields
 
         return models_with_fields
-
-    def _has_config_changed(self, thumbnail_field):
-        """Check if the thumbnail field config has changed"""
-        if not hasattr(thumbnail_field, '_cache_key'):
-            return False
-
-        cached_config = cache.get(thumbnail_field._cache_key)
-        current_config = {
-            'size': thumbnail_field.size,
-            'resize_method': thumbnail_field.resize_method,
-        }
-        return cached_config != current_config
 
     def _clear_thumbnail_cache(self):
         """Clear all thumbnail config cache entries"""

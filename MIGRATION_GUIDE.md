@@ -137,9 +137,9 @@ Silent exception swallowing replaced with proper logging:
    - `generate_thumbnails`: Create thumbnails for existing images
    - `regenerate_thumbnails`: Recreate thumbnails when size parameters change
 
-2. **Automatic Size Change Detection**:
-   - Thumbnails are automatically regenerated when size parameters are modified
-   - Uses Django's cache framework for efficient detection
+2. **Size Change Detection**:
+   - After changing size parameters, run `regenerate_thumbnails` to rebuild the affected thumbnails
+   - Fixed in 2.0.3: earlier 2.0.x versions only rebuilt with `regenerate_thumbnails --force` (see CHANGELOG.md)
 
 3. **Force Regeneration Option**:
    - Added `force_regenerate` parameter to `AdvanceThumbnailField`
