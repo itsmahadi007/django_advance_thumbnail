@@ -163,12 +163,11 @@ python manage.py generate_thumbnails --force                 # rebuild existing 
 python manage.py generate_thumbnails --dry-run               # preview only
 ```
 
-**`regenerate_thumbnails`** rebuilds thumbnails after you change `size` or `resize_method`.
+**`regenerate_thumbnails`** rebuilds the thumbnails that no longer match their field's `size` or `resize_method`, plus any that are missing. It checks the image files themselves, so it works after a restart and with any cache backend.
 
 ```bash
-python manage.py regenerate_thumbnails                 # rebuild where the config changed
+python manage.py regenerate_thumbnails                 # rebuild thumbnails whose size no longer matches
 python manage.py regenerate_thumbnails --force         # rebuild everything
-python manage.py regenerate_thumbnails --clear-cache   # forget cached config first
 python manage.py regenerate_thumbnails --dry-run       # preview only
 ```
 
@@ -180,7 +179,9 @@ Both commands accept `--model app_label.ModelName` and `--field name`.
 
 That fallback only sees filenames. If you replace a source file **under the same name** and you have no shared cache (Redis, Memcached), the change is not detected. Run `regenerate_thumbnails --force` in that case.
 
-**Config changes.** After changing `size` or `resize_method`, run `regenerate_thumbnails`. Existing rows are not rebuilt until they are saved again.
+**Config changes.** After changing `size` or `resize_method`, run `regenerate_thumbnails` once (for example, right after deploying). It compares every stored thumbnail with the size the new settings produce and rebuilds only the ones that differ. Saving a row does not rebuild its thumbnail for a config change. Before 2.0.3 the plain command never noticed a config change; on those versions use `regenerate_thumbnails --force`.
+
+**File names.** A thumbnail is named after its image and its field: `camera_thumbnail.jpg` for a field called `thumbnail`, `camera_cart_thumbnail.jpg` for `cart_thumbnail`. Several thumbnails of one image can share an `upload_to` folder, even on storage that overwrites files with the same name (S3 in django-storages does by default). Before 2.0.3 every thumbnail was named `<image>_thumbnail`, so give each field its own folder on those versions.
 
 **Thread safety.** Since v2.0, recursion is prevented with an instance-level flag instead of disconnecting and reconnecting signals. This makes the field safe under multi-threaded servers.
 

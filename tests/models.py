@@ -1,6 +1,7 @@
 """
 Test models for django_advance_thumbnail
 """
+from django.core.files.storage import FileSystemStorage
 from django.db import models
 from django_advance_thumbnail import AdvanceThumbnailField, RESIZE_FIT, RESIZE_FILL
 
@@ -82,6 +83,40 @@ class TestMultipleThumbnails(models.Model):
         source_field='image',
         upload_to='test_thumbnails/large/',
         size=(400, 400),
+        resize_method=RESIZE_FILL,
+        null=True,
+        blank=True,
+    )
+
+    class Meta:
+        app_label = 'tests'
+
+
+class OverwriteStorage(FileSystemStorage):
+    """Replaces a same-named file instead of renaming the new one (like django-storages' S3 default)"""
+
+    def get_available_name(self, name, max_length=None):
+        if self.exists(name):
+            self.delete(name)
+        return name
+
+
+class TestTwoThumbnailsOneFolder(models.Model):
+    """Two thumbnails of one image saved in the same folder on overwriting storage"""
+    image = models.ImageField(upload_to='test_images/')
+    thumbnail = AdvanceThumbnailField(
+        source_field='image',
+        upload_to='test_thumbnails/shared/',
+        storage=OverwriteStorage(),
+        size=(150, 150),
+        null=True,
+        blank=True,
+    )
+    cart_thumbnail = AdvanceThumbnailField(
+        source_field='image',
+        upload_to='test_thumbnails/shared/',
+        storage=OverwriteStorage(),
+        size=(50, 50),
         resize_method=RESIZE_FILL,
         null=True,
         blank=True,

@@ -26,6 +26,16 @@ def _lanczos():
     return getattr(Image, 'Resampling', Image).LANCZOS
 
 
+def _fit_size(source_size, box):
+    """Size ``Image.thumbnail`` gives ``source_size`` inside ``box`` (never upscales)."""
+    source_width, source_height = source_size
+    box_width, box_height = box
+    if source_width <= box_width and source_height <= box_height:
+        return source_width, source_height
+    scale = min(box_width / source_width, box_height / source_height)
+    return max(1, round(source_width * scale)), max(1, round(source_height * scale))
+
+
 class AdvanceThumbnailField(models.ImageField):
     """
     Custom ImageField that automatically generates thumbnails from a source image.
@@ -172,6 +182,36 @@ class AdvanceThumbnailField(models.ImageField):
             # Always clear the flag
             instance._generating_thumbnail = False
 
+    def _thumbnail_matches_config(self, instance):
+        """Whether the stored thumbnail has the size the current config produces.
+
+        Read from the image files, never the cache, so a changed ``size`` or
+        ``resize_method`` is noticed after a restart and on every worker. The
+        field writes its current config to the cache when the model loads, so
+        the cache alone cannot tell what the previous config was.
+        """
+        thumbnail = getattr(instance, self.name, None)
+        source = getattr(instance, self.source_field_name, None)
+        if not thumbnail or not thumbnail.name or not source or not source.name:
+            return False
+
+        try:
+            actual = (thumbnail.width, thumbnail.height)
+            if self.resize_method in (RESIZE_FILL, RESIZE_COVER):
+                return actual == self.size
+            source_width, source_height = source.width, source.height
+        except Exception as e:
+            logger.debug(f"Could not read image dimensions for {instance!r}: {e}")
+            return False
+
+        # Thumbnails are made after EXIF rotation, which may swap the source's
+        # stored width and height. Allow 1px for Pillow's aspect-ratio rounding.
+        for source_size in ((source_width, source_height), (source_height, source_width)):
+            expected = _fit_size(source_size, self.size)
+            if abs(actual[0] - expected[0]) <= 1 and abs(actual[1] - expected[1]) <= 1:
+                return True
+        return False
+
     def _store_field_config(self):
         """Store the current field configuration in cache for size change detection"""
         try:
@@ -252,10 +292,11 @@ class AdvanceThumbnailField(models.ImageField):
     def _thumbnail_matches_source(self, instance, source_field):
         """Whether the stored thumbnail was derived from the current source name.
 
-        Thumbnail names are built as ``<source stem>_thumbnail<source ext>``, so
-        the stored name tells us which source a thumbnail came from without any
-        cache. Storage backends may append a suffix to avoid collisions, so the
-        stem is matched as a prefix.
+        Thumbnail names are built as ``<source stem>_<field name><source ext>``
+        (before 2.0.3 always ``<source stem>_thumbnail<source ext>``, which is
+        still accepted), so the stored name tells us which source a thumbnail
+        came from without any cache. Storage backends may append a suffix to
+        avoid collisions, so the stem is matched as a prefix.
 
         Only the basename is available, so with a cold cache this cannot tell
         apart two sources sharing a filename (a source replaced in place, or the
@@ -277,10 +318,9 @@ class AdvanceThumbnailField(models.ImageField):
         if thumbnail_extension.lower() != source_extension.lower():
             return False
 
-        expected_stem = f"{source_stem}_thumbnail"
-        return (
-            thumbnail_stem == expected_stem
-            or thumbnail_stem.startswith(f"{expected_stem}_")
+        return any(
+            thumbnail_stem == expected_stem or thumbnail_stem.startswith(f"{expected_stem}_")
+            for expected_stem in (f"{source_stem}_{self.name}", f"{source_stem}_thumbnail")
         )
 
     @staticmethod
@@ -332,7 +372,9 @@ class AdvanceThumbnailField(models.ImageField):
                 img_copy.thumbnail(self.size, _lanczos())
 
             filename, extension = os.path.splitext(os.path.basename(source_field.name))
-            thumbnail_filename = f"{filename}_thumbnail{extension}"
+            # The field name keeps two thumbnails of one image apart (a field
+            # called "thumbnail" gives the same name as before 2.0.3).
+            thumbnail_filename = f"{filename}_{self.name}{extension}"
 
             thumbnail_io = io.BytesIO()
 
@@ -366,7 +408,11 @@ class AdvanceThumbnailField(models.ImageField):
             instance.save(update_fields=[self.name])
 
     def regenerate_thumbnails(self, model_class, force=False):
-        """Regenerate thumbnails for all instances of a model"""
+        """Regenerate thumbnails for all instances of a model.
+
+        Rebuilds thumbnails that are missing or no longer match ``size`` and
+        ``resize_method``; ``force=True`` rebuilds every one.
+        """
         queryset = model_class.objects.all()
 
         # Filter objects that have source images
@@ -380,8 +426,8 @@ class AdvanceThumbnailField(models.ImageField):
             source_field = getattr(instance, source_field_name, None)
             thumbnail_field_value = getattr(instance, self.name, None)
 
-            # Skip if thumbnail exists and not forcing
-            if thumbnail_field_value and not force:
+            # Skip thumbnails that already match the current config
+            if thumbnail_field_value and not force and self._thumbnail_matches_config(instance):
                 continue
 
             try:
